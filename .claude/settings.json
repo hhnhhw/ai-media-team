@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(.venv/Scripts/python.exe test_qwen_search.py 2>&1)"
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "name": "AI新媒体小编团队",
+  "description": "🤖 你的专属新媒体内容创作团队！主编智能体统筹调度，文案AI撰写吸睛文案，配图AI智能搜索高质量配图。支持公众号、小红书、抖音、微博等多平台风格，一键生成完整推文。",
+  "version": "1.0.0",
+  "category": "内容创作",
+  "tags": ["新媒体", "文案写作", "配图", "公众号", "小红书", "抖音", "微博", "内容营销"],
+  "author": "AI新媒体小编团队",
+  "icon": "📰",
+  "greeting": "👋 你好！我是AI新媒体小编团队的主编「老编」。我手下有两位得力干将：✍️ 文案AI（小文）和 🎨 配图AI（小图）。告诉我你想写什么主题，我们帮你一键生成完整推文！",
+  "capabilities": [
+    "智能分析用户需求，自动识别写作风格和目标平台",
+    "撰写多风格文案（幽默风趣、文艺清新、专业严谨、小红书种草风等）",
+    "适配多平台（公众号、小红书、抖音、微博等）",
+    "从文章内容中提取具体实体，智能搜索高质量配图",
+    "整合文案和配图，输出完整推文预览"
+  ],
+  "use_cases": [
+    "帮我写一篇关于北京美食的公众号推文",
+    "写一篇小红书种草笔记，推荐哈尔滨冰雪大世界",
+    "生成一篇抖音风格的短视频脚本，主题是春季穿搭",
+    "写一篇关于AI技术的深度分析文章",
+    "帮我写一篇文艺清新的旅行游记"
+  ],
+  "model_config": {
+    "model": "deepseek-v4-pro",
+    "temperature": 1.0,
+    "max_tokens": 4096,
+    "streaming": true
+  },
+  "tools": [
+    {
+      "name": "write_article",
+      "description": "撰写各种风格的文章、推文、种草笔记",
+      "parameters": {
+        "topic": {
+          "type": "string",
+          "description": "文章主题",
+          "required": true
+        },
+        "style": {
+          "type": "string",
+          "description": "写作风格，如：幽默风趣、文艺清新、专业严谨、小红书种草风",
+          "default": "轻松幽默，吸引眼球"
+        },
+        "word_count": {
+          "type": "integer",
+          "description": "目标字数",
+          "default": 800
+        },
+        "platform": {
+          "type": "string",
+          "description": "发布平台：公众号/小红书/抖音/微博",
+          "default": "公众号"
+        }
+      }
+    },
+    {
+      "name": "generate_illustration",
+      "description": "根据文章内容搜索高质量配图",
+      "parameters": {
+        "prompt": {
+          "type": "string",
+          "description": "文章中的具体实体列表（逗号分隔的名词），如：北京烤鸭, 全聚德, 烤鸭师傅切片",
+          "required": true
+        },
+        "style": {
+          "type": "string",
+          "description": "图片风格",
+          "default": "真实摄影"
+        }
+      }
+    }
+  ],
+  "memory_enabled": true,
+  "multi_turn_conversation": true,
+  "output_format": "markdown",
+  "metadata": {
+    "framework": "LangChain Agent",
+    "llm_provider": "DeepSeek",
+    "image_source": "Pexels API",
+    "architecture": "Multi-Agent Orchestration"
+  }
+}
