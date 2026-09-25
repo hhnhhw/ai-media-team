@@ -74,7 +74,7 @@ kind: StatefulSet
 metadata:
   name: ${{ defaults.app_name }}
   annotations:
-    originImageName: ghcr.io/hhnhhw/ai-media-team:79ecc9b9c971b1c0d6bf91a0ced06cf1abe1c45b
+    originImageName: ghcr.io/hhnhhw/ai-media-team:86ae78ee65ce6c3a7fe30c144b8c3553bd6428a8
     deploy.cloud.sealos.io/minReplicas: '1'
     deploy.cloud.sealos.io/maxReplicas: '1'
   labels:
@@ -95,7 +95,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: ${{ defaults.app_name }}
-          image: ghcr.io/hhnhhw/ai-media-team:79ecc9b9c971b1c0d6bf91a0ced06cf1abe1c45b
+          image: ghcr.io/hhnhhw/ai-media-team:86ae78ee65ce6c3a7fe30c144b8c3553bd6428a8
           imagePullPolicy: IfNotPresent
           env:
             - name: LLM_API_KEY

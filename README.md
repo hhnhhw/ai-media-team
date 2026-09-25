@@ -101,16 +101,23 @@ LLM_API_KEY=sk-your-api-key-here
 LLM_BASE_URL=https://your-gateway.example.com/v1
 LLM_MODEL=your-model-name
 
-# 可选：采样温度与输出上限（不填用默认值 0.7 / 4096 / 200）
+# 可选：对外展示的模型名（留空则与 LLM_MODEL 相同）
+# LLM_DISPLAY_NAME=deepseek-v4.1-flash
+
+# 可选：采样温度与输出上限（不填用默认值 0.7 / 4096 / 1024）
 # LLM_TEMPERATURE=0.7
 # LLM_MAX_TOKENS=4096
-# LLM_MAX_TOKENS_EXTRACT=200
+# LLM_MAX_TOKENS_EXTRACT=1024
 
 PEXELS_API_KEY=your-pexels-api-key-here
 MOCK_MODE=false
 ```
 
-> ⚠️ **`LLM_TEMPERATURE` 需按所用模型设置**：部分推理模型（如 `deepseek-reasoner`）只接受 `1.0`，传其他值会被服务端拒绝；常规对话模型建议 `0.3~0.8`。填错格式时会自动回退到默认值，不会导致服务启动失败。
+> 💡 **`LLM_DISPLAY_NAME`**：当实际调用的 `model` 是网关别名（如 `deepseek-flash`），但你希望在界面上展示更友好的名称时使用。发给服务端的始终是 `LLM_MODEL`。
+>
+> ⚠️ **`LLM_TEMPERATURE` 需按所用模型设置**：部分推理模型只接受 `1.0`，传其他值会被服务端拒绝；常规情况建议 `0.3~0.8`。填错格式时会自动回退到默认值，不会导致服务启动失败。
+>
+> ⚠️ **推理模型的 token 预算**：`deepseek` 等推理模型会先输出 thinking token，**这些 token 同样计入 `max_tokens`**。预算偏小时会出现"思考写完了、正文还没开始"，即正文为空。因此 `max_tokens` 要留足余量 —— 它只是天花板，不影响实际计费。
 >
 > ⚠️ **`LLM_BASE_URL` 必须能被运行环境访问到**。部署到 Sealos 等公网集群时，内网地址（`192.168.x.x` / `10.x.x.x`）连不通。
 
@@ -260,7 +267,7 @@ curl http://127.0.0.1:8002/health
 | 交互界面 | Streamlit |
 | Agent 编排 | LangChain (`create_agent`) |
 | 微服务 | FastAPI + Uvicorn |
-| 大模型 | 任意 OpenAI 兼容接口（`LLM_MODEL` / `LLM_BASE_URL` / `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` 均可配置） |
+| 大模型 | 任意 OpenAI 兼容接口（`LLM_MODEL` / `LLM_BASE_URL` / `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_DISPLAY_NAME` 均可配置） |
 | 图库检索 | Pexels API |
 | 持久化 | SQLite (WAL) |
 
