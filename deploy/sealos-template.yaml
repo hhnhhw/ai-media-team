@@ -1,0 +1,194 @@
+apiVersion: app.sealos.io/v1
+kind: Template
+metadata:
+  name: ai-media-team
+spec:
+  title: 'AI 新媒体小编团队'
+  url: 'https://github.com/hhnhhw/ai-media-team'
+  gitRepo: 'https://github.com/hhnhhw/ai-media-team'
+  author: 'hhnhhw'
+  description: 'DeepSeek 主编调度多 Agent 协同生产新媒体图文：主编拆解需求，文案AI 写作，配图AI 检索配图。LangChain + FastAPI + Streamlit + Pexels。'
+  readme: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/README.md'
+  icon: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/logo.png'
+  templateType: inline
+  locale: zh
+  i18n:
+    zh:
+      description: 'DeepSeek 主编调度多 Agent 协同生产新媒体图文：主编拆解需求，文案AI 写作，配图AI 检索配图。'
+      readme: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/README_zh.md'
+  categories:
+    - ai
+  defaults:
+    app_host:
+      type: string
+      value: ai-media-team-${{ random(8) }}
+    app_name:
+      type: string
+      value: ai-media-team-${{ random(8) }}
+  inputs:
+    LLM_API_KEY:
+      description: '大模型 API Key（DeepSeek 或任意 OpenAI 兼容服务）。必填。'
+      type: string
+      required: true
+    LLM_BASE_URL:
+      description: '大模型接口地址，默认 DeepSeek 官方地址。'
+      type: string
+      default: 'https://api.deepseek.com/v1'
+      required: true
+    LLM_MODEL:
+      description: '模型名称，例如 deepseek-chat。'
+      type: string
+      default: 'deepseek-chat'
+      required: true
+    PEXELS_API_KEY:
+      description: 'Pexels 图库 API Key（免费申请 https://www.pexels.com/api/）。必填。'
+      type: string
+      required: true
+    MOCK_MODE:
+      description: '启用演示模式（不调用真实大模型与图库，返回内置示例数据）。'
+      type: boolean
+      default: 'false'
+      required: false
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ${{ defaults.app_name }}
+  annotations:
+    originImageName: ghcr.io/hhnhhw/ai-media-team:79ecc9b9c971b1c0d6bf91a0ced06cf1abe1c45b
+    deploy.cloud.sealos.io/minReplicas: '1'
+    deploy.cloud.sealos.io/maxReplicas: '1'
+  labels:
+    app: ${{ defaults.app_name }}
+    cloud.sealos.io/app-deploy-manager: ${{ defaults.app_name }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  serviceName: ${{ defaults.app_name }}
+  selector:
+    matchLabels:
+      app: ${{ defaults.app_name }}
+  template:
+    metadata:
+      labels:
+        app: ${{ defaults.app_name }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: ${{ defaults.app_name }}
+          image: ghcr.io/hhnhhw/ai-media-team:79ecc9b9c971b1c0d6bf91a0ced06cf1abe1c45b
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LLM_API_KEY
+              value: ${{ inputs.LLM_API_KEY }}
+            - name: LLM_BASE_URL
+              value: ${{ inputs.LLM_BASE_URL }}
+            - name: LLM_MODEL
+              value: ${{ inputs.LLM_MODEL }}
+            - name: PEXELS_API_KEY
+              value: ${{ inputs.PEXELS_API_KEY }}
+            - name: MOCK_MODE
+              value: ${{ inputs.MOCK_MODE }}
+            # 对话历史写入持久卷，容器重建后不丢失
+            - name: MEMORY_DB_PATH
+              value: /data/memory.db
+          resources:
+            requests:
+              cpu: 200m
+              memory: 204Mi
+            limits:
+              cpu: 2
+              memory: 2048Mi
+          ports:
+            - name: http
+              containerPort: 8501
+          volumeMounts:
+            - name: vn-data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        annotations:
+          path: /data
+          value: '1'
+        name: vn-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${{ defaults.app_name }}
+  labels:
+    app: ${{ defaults.app_name }}
+    cloud.sealos.io/app-deploy-manager: ${{ defaults.app_name }}
+spec:
+  ports:
+    - name: http
+      port: 8501
+      targetPort: 8501
+  selector:
+    app: ${{ defaults.app_name }}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${{ defaults.app_name }}
+  labels:
+    app: ${{ defaults.app_name }}
+    cloud.sealos.io/app-deploy-manager: ${{ defaults.app_name }}
+    cloud.sealos.io/app-deploy-manager-domain: ${{ defaults.app_host }}
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-body-size: 32m
+    nginx.ingress.kubernetes.io/server-snippet: |
+      client_header_buffer_size 64k;
+      large_client_header_buffers 4 128k;
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
+    nginx.ingress.kubernetes.io/client-body-buffer-size: 64k
+    nginx.ingress.kubernetes.io/proxy-buffer-size: 64k
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '300'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '300'
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      if ($request_uri ~* \.(js|css|gif|jpe?g|png)) {
+        expires 30d;
+        add_header Cache-Control "public";
+      }
+spec:
+  rules:
+    - host: ${{ defaults.app_host }}.${{ SEALOS_CLOUD_DOMAIN }}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: ${{ defaults.app_name }}
+                port:
+                  number: 8501
+  tls:
+    - hosts:
+        - ${{ defaults.app_host }}.${{ SEALOS_CLOUD_DOMAIN }}
+      secretName: ${{ SEALOS_CERT_SECRET_NAME }}
+
+---
+apiVersion: app.sealos.io/v1
+kind: App
+metadata:
+  name: ${{ defaults.app_name }}
+  labels:
+    cloud.sealos.io/app-deploy-manager: ${{ defaults.app_name }}
+spec:
+  data:
+    url: https://${{ defaults.app_host }}.${{ SEALOS_CLOUD_DOMAIN }}
+  displayType: normal
+  icon: 'https://github.com/hhnhhw.png'
+  name: 'AI 新媒体小编团队'
+  type: link

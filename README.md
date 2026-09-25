@@ -153,6 +153,15 @@ ai-media-team/
 │   ├── copywriter_tool.py        # write_article
 │   └── illustrator_tool.py       # generate_illustration
 │
+├── Dockerfile                    # 单容器多进程镜像
+├── .dockerignore                 # 构建上下文排除（严格排除 .env）
+│
+├── deploy/                       # 部署相关
+│   ├── supervisor.py             # 容器内进程监管器
+│   └── sealos-template.yaml      # Sealos 应用模板（含 StatefulSet/Service/Ingress/App）
+│
+├── .github/workflows/deploy.yml  # CI/CD：构建镜像并滚动更新 Sealos
+│
 └── agent-config/                 # 百度千帆应用广场发布配置包
     ├── qianfan-agent-import.json # 一键导入配置
     ├── agent-profile.json        # 智能体基本信息
@@ -307,6 +316,95 @@ $env:PYTHONIOENCODING = "utf-8"
 
 删除根目录下的 `memory.db` 即可（该文件已在 `.gitignore` 中，不会被提交）。
 </details>
+
+---
+
+## ☁️ 部署到 Sealos
+
+本项目已部署在 [Sealos Cloud](https://sealos.io)：
+
+| 项目 | 值 |
+|------|-----|
+| 🌐 在线地址 | https://ai-media-team-knjlrlsf.sealosbja.site |
+| 区域 | `bja.sealos.run` |
+| 工作区 | `ns-8zpzccfm` |
+| 工作负载 | StatefulSet `ai-media-team-yrncisyf`（1 副本） |
+| 资源配额 | CPU 2 核 / 内存 2Gi / 存储 1Gi |
+| 镜像 | `ghcr.io/hhnhhw/ai-media-team` |
+
+### 容器架构：单容器多进程
+
+Sealos 上的部署单元是**一个容器**，内部由 `deploy/supervisor.py` 拉起三个进程，对外只暴露 `8501`：
+
+```
+                    ┌─────────── 容器 ───────────┐
+   公网 Ingress ───► │  Streamlit :8501 (入口)     │
+                    │      ↓ 127.0.0.1           │
+                    │  文案AI :8001  ← 自动重启    │
+                    │  配图AI :8002  ← 自动重启    │
+                    └────────────┬───────────────┘
+                                 │
+                        PVC 挂载 /data
+                     （MEMORY_DB_PATH=/data/memory.db）
+```
+
+监管策略：
+
+- 后端服务（8001/8002）异常退出会被**自动重启**（最多 20 次）；
+- Streamlit 是用户入口，它退出即视为容器失效，整个容器退出交由平台重建 —— 避免「进程活着但页面打不开」；
+- 收到 `SIGTERM` 时先通知子进程、超时强杀，保证滚动更新能快速干净地退出。
+
+> 💡 三个进程通过 `127.0.0.1` 通信，与 `config.py` 的默认地址一致，因此**部署无需改动任何业务代码**。
+
+### 自动部署（CI/CD）
+
+`.github/workflows/deploy.yml` 实现了「推送即部署」：
+
+```
+git push origin main
+      │
+      ▼
+┌─────────────────────────────────────────┐
+│ Job 1: build                            │
+│  docker buildx (linux/amd64)            │
+│  → ghcr.io/hhnhhw/ai-media-team:<sha>   │
+│  → ghcr.io/hhnhhw/ai-media-team:latest  │
+└────────────────┬────────────────────────┘
+                 ▼
+┌─────────────────────────────────────────┐
+│ Job 2: deploy                           │
+│  kubectl set image statefulset/<app>    │
+│  kubectl rollout status (等待就绪)       │
+└─────────────────────────────────────────┘
+```
+
+所需的仓库配置（**非代码内容，需在 GitHub 仓库设置中维护**）：
+
+| 类型 | 名称 | 说明 |
+|------|------|------|
+| Secret | `SEALOS_KUBECONFIG` | Sealos kubeconfig 的 base64 编码。权限较高，如泄露请到 Sealos 重新签发 |
+| Variable | `SEALOS_NAMESPACE` | `ns-8zpzccfm` |
+| Variable | `SEALOS_APP_NAME` | `ai-media-team-yrncisyf` |
+
+镜像标签使用提交 SHA（`${{ github.sha }}`），因此每次推送都会产生**唯一的镜像标签**并触发一次真实的滚动更新；配合 `imagePullPolicy: IfNotPresent`，不会误用旧镜像。
+
+> ⚠️ 修改 GitHub 仓库名或转移仓库后，GHCR 包路径会变化，需同步更新 `SEALOS_APP_NAME` 与模板中的镜像地址。
+
+### 重新部署到新工作区
+
+模板存放在 `deploy/sealos-template.yaml`（已通过 Sealos 模板质量校验）：
+
+```bash
+# 1. 复制为技能约定的工作副本
+mkdir -p .sealos/template
+cp deploy/sealos-template.yaml .sealos/template/index.yaml
+
+# 2. 先 dry-run 验证（不创建任何资源）
+node deploy-template.mjs .sealos/template/index.yaml --dry-run
+
+# 3. 正式部署（敏感参数用 0600 权限的参数文件传入，不要用命令行参数）
+node deploy-template.mjs .sealos/template/index.yaml --args-file ./deploy-args.json
+```
 
 ---
 

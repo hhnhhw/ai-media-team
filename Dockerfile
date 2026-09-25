@@ -12,6 +12,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# OCI 元数据：把 GHCR 包关联到本仓库，便于溯源并继承仓库可见性
+LABEL org.opencontainers.image.title="AI 新媒体小编团队" \
+      org.opencontainers.image.description="DeepSeek 主编调度的多 Agent 新媒体图文生产系统" \
+      org.opencontainers.image.source="https://github.com/hhnhhw/ai-media-team" \
+      org.opencontainers.image.url="https://github.com/hhnhhw/ai-media-team" \
+      org.opencontainers.image.licenses="MIT"
+
 # 依赖单独一层，代码变更时可复用缓存
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
