@@ -13,18 +13,7 @@ DB_PATH = os.environ.get(
 )
 
 
-def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
-
-
-def init_db():
-    """初始化数据库表"""
-    conn = get_conn()
-    conn.executescript("""
+_SCHEMA_SQL = """
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL DEFAULT '',
@@ -67,9 +56,39 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_articles_conv ON articles(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_images_conv ON images(conversation_id);
-    """)
+"""
+
+_schema_initialized = False
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """确保表结构存在（每个进程只执行一次）。
+
+    读函数可能在 init_db() 之前被调用：Streamlit 自上而下执行脚本，
+    侧边栏的 list_conversations() 出现在 init_db() 之前，因此在全新数据库
+    （例如刚挂载的空持久卷）上会直接抛 "no such table: conversations"。
+    把建表收敛到"建立连接"这一步，任何调用方都不必再关心顺序。
+    """
+    global _schema_initialized
+    if _schema_initialized:
+        return
+    conn.executescript(_SCHEMA_SQL)
     conn.commit()
-    conn.close()
+    _schema_initialized = True
+
+
+def get_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    _ensure_schema(conn)
+    return conn
+
+
+def init_db():
+    """初始化数据库表（保留此入口以兼容旧调用；get_conn() 同样会确保建表）"""
+    get_conn().close()
 
 
 # ── 对话管理 ──────────────────────────────────────────────────
