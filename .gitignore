@@ -48,6 +48,10 @@ generated_images/
 # ── 本地工具（如手动下载的 gh CLI）────────────────────────
 .tools/
 
+# ── Sealos 部署状态与凭据（含 kubeconfig，切勿提交）────────
+.sealos/
+.kube/
+
 # ── 编辑器/助手本地配置 ───────────────────────────────────
 .claude/settings.local.json
 

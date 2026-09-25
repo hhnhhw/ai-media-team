@@ -1,0 +1,38 @@
+# ── Docker 构建上下文排除清单 ─────────────────────────────────
+# 关键安全项：.env 绝不能进入镜像层，否则密钥会被固化在镜像历史中。
+.env
+.env.*
+!.env.example
+
+# 本地虚拟环境 / 依赖缓存
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 本地数据（容器内运行时自动重建）
+memory.db
+memory.db-journal
+*.sqlite
+*.sqlite3
+*.db
+
+# 版本控制与技能产物
+.git/
+.gitignore
+.sealos/
+.tools/
+.claude/
+.idea/
+.vscode/
+
+# 文档与开发辅助（运行不需要）
+README.md
+LICENSE
+agent-config/
+test_fix.py
+*.log
+logs/

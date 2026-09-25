@@ -7,7 +7,10 @@ SQLite 记忆模块
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory.db")
+DB_PATH = os.environ.get(
+    "MEMORY_DB_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory.db"),
+)
 
 
 def get_conn() -> sqlite3.Connection:
