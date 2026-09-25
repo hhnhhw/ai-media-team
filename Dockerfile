@@ -14,7 +14,7 @@ WORKDIR /app
 
 # OCI 元数据：把 GHCR 包关联到本仓库，便于溯源并继承仓库可见性
 LABEL org.opencontainers.image.title="AI 新媒体小编团队" \
-      org.opencontainers.image.description="DeepSeek 主编调度的多 Agent 新媒体图文生产系统" \
+      org.opencontainers.image.description="多 Agent 协同的新媒体图文生产系统（主编调度 + 文案AI + 配图AI）" \
       org.opencontainers.image.source="https://github.com/hhnhhw/ai-media-team" \
       org.opencontainers.image.url="https://github.com/hhnhhw/ai-media-team" \
       org.opencontainers.image.licenses="MIT"
@@ -24,7 +24,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 仅复制运行所需内容（.env / .venv / memory.db 等由 .dockerignore 排除）
-COPY config.py memory.py chief_editor.py main.py ./
+COPY config.py memory.py chief_editor.py main.py llm_utils.py ./
 COPY services/ ./services/
 COPY tools/ ./tools/
 COPY deploy/ ./deploy/

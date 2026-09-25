@@ -1,13 +1,13 @@
 """
 AI 新媒体小编团队 —— Streamlit 主界面
-DeepSeek-V4 主编调度 · 文案AI写作 · Pexels 配图
+LLM 主编调度 · 文案AI写作 · Pexels 配图
 """
 import streamlit as st
 import time
 import requests
 import re
 import uuid
-from config import COPYWRITER_URL, ILLUSTRATOR_URL, LLM_MOCK
+from config import COPYWRITER_URL, ILLUSTRATOR_URL, LLM_MOCK, LLM_DISPLAY_NAME
 from memory import (
     init_db, create_conversation,
     list_conversations, delete_conversation,
@@ -116,11 +116,11 @@ with st.sidebar:
 
     st.divider()
 
-    # 模式提示
+    # 模式提示（模型名取自配置，换模型无需改代码）
     if not LLM_MOCK:
-        st.success("🚀 **Live 模式** — DeepSeek-V4 驱动\n\n✍️ 文案AI：智能写作\n🎨 配图AI：Pexels 多关键词搜索 · 各取首位")
+        st.success(f"🚀 **Live 模式** — `{LLM_DISPLAY_NAME}` 驱动\n\n✍️ 文案AI：智能写作\n🎨 配图AI：Pexels 多关键词搜索 · 各取首位")
     else:
-        st.info("📌 **Mock 演示模式** — 配置 `.env` 中的 DeepSeek API Key 即可启用")
+        st.info("📌 **Mock 演示模式** — 配置 `.env` 中的 LLM_API_KEY 即可启用")
 
     st.divider()
 
@@ -154,13 +154,13 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-    st.caption("DeepSeek-V4 + Pexels + LangChain + Streamlit")
+    st.caption(f"{LLM_DISPLAY_NAME} + Pexels + LangChain + Streamlit")
 
 # ── 主标题 ────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
     <h1>📰 AI 新媒体小编团队</h1>
-    <p>DeepSeek-V4 主编调度 · AI 智能写作 · Pexels 多关键词配图</p>
+    <p>LLM 主编调度 · AI 智能写作 · Pexels 多关键词配图</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -590,4 +590,4 @@ if prompt := st.chat_input("输入你想写的主题，比如：帮我写一篇�
 
 # ── 底部 ──────────────────────────────────────────────────────
 st.divider()
-st.caption("🤖 AI新媒体小编团队 | DeepSeek + Pexels + LangChain + Streamlit")
+st.caption(f"🤖 AI新媒体小编团队 | {LLM_DISPLAY_NAME} + Pexels + LangChain + Streamlit")

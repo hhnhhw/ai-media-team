@@ -18,7 +18,11 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import uvicorn
 from openai import OpenAI
-from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_MOCK, COPYWRITER_PORT
+from config import (
+    LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_MOCK,
+    LLM_TEMPERATURE, LLM_MAX_TOKENS, LLM_DISPLAY_NAME, COPYWRITER_PORT,
+)
+from llm_utils import chat_text
 
 app = FastAPI(title="文案AI服务", description="专职写文章、推文、种草笔记")
 
@@ -163,18 +167,18 @@ def generate_with_llm(topic: str, style: str, word_count: int, platform: str) ->
 - 开头要抓人眼球，结尾要有行动号召
 - 适合在{platform}上发布
 """
-    response = client.chat.completions.create(
+    # 字数×4 是经验估算；下限 1024 是为了给推理模型的 thinking 留出预算，
+    # 否则短文章会因推理 token 吃光额度而拿到空正文。
+    content = chat_text(
+        client,
         model=LLM_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"请写一篇关于「{topic}」的文章，{word_count}字左右，风格：{style}"},
         ],
-        temperature=1.0,  # deepseek-v4-pro 推理模型要求 temperature=1.0
-        max_tokens=min(word_count * 4, 4096),
+        temperature=LLM_TEMPERATURE,
+        max_tokens=max(1024, min(word_count * 4, LLM_MAX_TOKENS)),
     )
-    content = response.choices[0].message.content or ""
-    if not content and hasattr(response.choices[0].message, 'reasoning_content'):
-        content = (response.choices[0].message.reasoning_content or "")
     # 尝试提取标题
     lines = content.strip().split("\n")
     title = ""
@@ -206,10 +210,15 @@ def generate(req: WriteRequest):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "mode": "mock" if LLM_MOCK else "live", "model": LLM_MODEL}
+    return {
+        "status": "ok",
+        "mode": "mock" if LLM_MOCK else "live",
+        "model": LLM_DISPLAY_NAME,
+        "upstream_model": LLM_MODEL,
+    }
 
 
 if __name__ == "__main__":
     print(f"✍️  文案AI服务启动 → http://127.0.0.1:{COPYWRITER_PORT}")
-    print(f"   模式: {'MOCK (演示)' if LLM_MOCK else f'LIVE ({LLM_MODEL})'}")
+    print(f"   模式: {'MOCK (演示)' if LLM_MOCK else f'LIVE ({LLM_DISPLAY_NAME})'}")
     uvicorn.run(app, host="0.0.0.0", port=COPYWRITER_PORT, log_level="info")

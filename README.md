@@ -1,6 +1,6 @@
 # 📰 AI 新媒体小编团队
 
-> **DeepSeek 主编调度 · AI 智能写作 · Pexels 多关键词配图**
+> **LLM 主编调度 · AI 智能写作 · Pexels 多关键词配图**
 >
 > 一个由多个 AI Agent 协同工作的新媒体内容生产系统：**主编**理解需求并拆解任务，**文案AI**负责写作，**配图AI**负责配图，最终交付图文并茂的成稿。
 
@@ -14,7 +14,6 @@
 - 💬 **对话历史持久化** — SQLite 存储会话与消息，跨 Streamlit 会话保留上下文
 - 📡 **微服务架构** — 文案 / 配图各自独立 FastAPI 服务，可单独部署到云端
 - 🔌 **Mock 演示模式** — 未配置 API Key 时自动降级为内置示例数据，零成本跑通全流程
-- ☁️ **可发布为智能体** — 内置百度千帆应用广场配置文件（见 `agent-config/`）
 
 ---
 
@@ -43,7 +42,7 @@
                        │                      │
                        ▼                      ▼
               ┌──────────────────┐  ┌──────────────────┐
-              │ DeepSeek / OpenAI │  │   Pexels API     │
+              │ OpenAI 兼容 LLM   │  │   Pexels API     │
               │  兼容 LLM 接口    │  │  多关键词图库检索 │
               └──────────────────┘  └──────────────────┘
                        │                      │
@@ -62,7 +61,7 @@
 ### 前置要求
 
 - Python **3.10+**
-- [DeepSeek API Key](https://platform.deepseek.com/)（或任意 OpenAI 兼容接口）
+- **任意 OpenAI 兼容**大模型服务的 API Key（官方 API、云厂商托管服务或自建推理网关均可）
 - [Pexels API Key](https://www.pexels.com/api/)（免费申请）
 
 ### 1. 克隆并创建虚拟环境
@@ -97,12 +96,23 @@ cp .env.example .env
 编辑 `.env`，填入你自己的密钥：
 
 ```ini
+# 任意 OpenAI 兼容服务（官方 API / 云厂商托管 / 自建网关）
 LLM_API_KEY=sk-your-api-key-here
-LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_MODEL=deepseek-v4-pro
+LLM_BASE_URL=https://your-gateway.example.com/v1
+LLM_MODEL=your-model-name
+
+# 可选：采样温度与输出上限（不填用默认值 0.7 / 4096 / 200）
+# LLM_TEMPERATURE=0.7
+# LLM_MAX_TOKENS=4096
+# LLM_MAX_TOKENS_EXTRACT=200
+
 PEXELS_API_KEY=your-pexels-api-key-here
 MOCK_MODE=false
 ```
+
+> ⚠️ **`LLM_TEMPERATURE` 需按所用模型设置**：部分推理模型（如 `deepseek-reasoner`）只接受 `1.0`，传其他值会被服务端拒绝；常规对话模型建议 `0.3~0.8`。填错格式时会自动回退到默认值，不会导致服务启动失败。
+>
+> ⚠️ **`LLM_BASE_URL` 必须能被运行环境访问到**。部署到 Sealos 等公网集群时，内网地址（`192.168.x.x` / `10.x.x.x`）连不通。
 
 > 💡 不填任何 Key 也能启动 —— 系统会自动进入 **Mock 演示模式**，用内置示例数据跑通全流程。
 
@@ -161,13 +171,6 @@ ai-media-team/
 │   └── sealos-template.yaml      # Sealos 应用模板（含 StatefulSet/Service/Ingress/App）
 │
 ├── .github/workflows/deploy.yml  # CI/CD：构建镜像并滚动更新 Sealos
-│
-└── agent-config/                 # 百度千帆应用广场发布配置包
-    ├── qianfan-agent-import.json # 一键导入配置
-    ├── agent-profile.json        # 智能体基本信息
-    ├── system-prompt.md          # 完整系统提示词
-    ├── tool-definitions.md       # 工具定义文档
-    └── publish-guide.md          # 发布操作指南
 ```
 
 ---
@@ -250,18 +253,6 @@ curl http://127.0.0.1:8002/health
 
 ---
 
-## ☁️ 部署为在线智能体
-
-`agent-config/` 提供了发布到**百度千帆应用广场**的完整配置包：
-
-1. 将两个微服务部署到公网（云函数 CFC / 云服务器 BCC / 容器服务 CCE 均可，详见 `agent-config/publish-guide.md`）
-2. 修改 `qianfan-agent-import.json` 中的 `${COPYWRITER_SERVICE_URL}` 与 `${ILLUSTRATOR_SERVICE_URL}` 为实际地址
-3. 在千帆控制台选择「导入配置」并上传该 JSON
-
-详细步骤见 [`agent-config/README.md`](agent-config/README.md)。
-
----
-
 ## 🛠️ 技术栈
 
 | 层次 | 技术 |
@@ -269,7 +260,7 @@ curl http://127.0.0.1:8002/health
 | 交互界面 | Streamlit |
 | Agent 编排 | LangChain (`create_agent`) |
 | 微服务 | FastAPI + Uvicorn |
-| 大模型 | DeepSeek-V4-Pro（OpenAI 兼容接口） |
+| 大模型 | 任意 OpenAI 兼容接口（`LLM_MODEL` / `LLM_BASE_URL` / `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` 均可配置） |
 | 图库检索 | Pexels API |
 | 持久化 | SQLite (WAL) |
 
@@ -422,4 +413,4 @@ node deploy-template.mjs .sealos/template/index.yaml --args-file ./deploy-args.j
 
 ---
 
-<p align="center">DeepSeek-V4 + Pexels + LangChain + Streamlit</p>
+<p align="center">LLM + Pexels + LangChain + Streamlit</p>

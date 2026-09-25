@@ -8,7 +8,7 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware
 from typing import Any, Callable
 
-from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_MOCK
+from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_MOCK, LLM_TEMPERATURE
 from tools.copywriter_tool import write_article
 from tools.illustrator_tool import generate_illustration
 
@@ -98,7 +98,7 @@ def create_chief_editor(checkpointer=None):
         api_key=LLM_API_KEY,
         base_url=LLM_BASE_URL,
         model=LLM_MODEL,
-        temperature=1.0,
+        temperature=LLM_TEMPERATURE,
         streaming=True,
     )
 

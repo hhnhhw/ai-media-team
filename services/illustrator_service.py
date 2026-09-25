@@ -16,7 +16,11 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, IMAGE_MOCK, ILLUSTRATOR_PORT, PEXELS_API_KEY
+from config import (
+    LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, IMAGE_MOCK, ILLUSTRATOR_PORT,
+    PEXELS_API_KEY, LLM_TEMPERATURE, LLM_MAX_TOKENS_EXTRACT, LLM_DISPLAY_NAME,
+)
+from llm_utils import chat_text
 
 app = FastAPI(title="配图AI服务")
 
@@ -148,15 +152,13 @@ def _extract_keywords(prompt: str) -> list[str]:
     # 文章描述 → LLM 提取
     client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
     try:
-        resp = client.chat.completions.create(
+        text = chat_text(
+            client,
             model=LLM_MODEL,
             messages=[{"role": "user", "content":
                 f"提取2-5个可拍摄的视觉关键词（地名/菜名/景点/物品）。只输出逗号分隔。\n{prompt[:300]}"}],
-            temperature=1.0, max_tokens=200,
+            temperature=LLM_TEMPERATURE, max_tokens=LLM_MAX_TOKENS_EXTRACT,
         )
-        text = resp.choices[0].message.content.strip()
-        if not text and hasattr(resp.choices[0].message, 'reasoning_content'):
-            text = (resp.choices[0].message.reasoning_content or "").strip()
         entities = [e.strip() for e in text.replace("、", ",").replace("，", ",").split(",") if e.strip()]
         if entities:
             print(f"[配图AI] LLM提取: {entities[:5]}")
@@ -212,9 +214,11 @@ def generate(req: DrawRequest):
 @app.get("/health")
 def health():
     return {"status": "ok", "mode": "mock" if IMAGE_MOCK else "live",
-            "search": "Pexels API + DeepSeek 智能筛选"}
+            "model": LLM_DISPLAY_NAME,
+            "upstream_model": LLM_MODEL,
+            "search": f"Pexels API + {LLM_DISPLAY_NAME} 智能筛选"}
 
 if __name__ == "__main__":
     print(f"🎨 配图AI服务 → http://127.0.0.1:{ILLUSTRATOR_PORT}  |  "
-          f"{'MOCK' if IMAGE_MOCK else 'Pexels + DeepSeek'}")
+          f"{'MOCK' if IMAGE_MOCK else f'Pexels + {LLM_DISPLAY_NAME}'}")
     uvicorn.run(app, host="0.0.0.0", port=ILLUSTRATOR_PORT, log_level="info")

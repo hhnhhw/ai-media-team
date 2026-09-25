@@ -7,14 +7,14 @@ spec:
   url: 'https://github.com/hhnhhw/ai-media-team'
   gitRepo: 'https://github.com/hhnhhw/ai-media-team'
   author: 'hhnhhw'
-  description: 'DeepSeek 主编调度多 Agent 协同生产新媒体图文：主编拆解需求，文案AI 写作，配图AI 检索配图。LangChain + FastAPI + Streamlit + Pexels。'
+  description: '多 Agent 协同的新媒体图文生产：主编拆解需求，文案AI 写作，配图AI 检索配图。LangChain + FastAPI + Streamlit + Pexels，可对接任意 OpenAI 兼容大模型。'
   readme: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/README.md'
   icon: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/logo.png'
   templateType: inline
   locale: zh
   i18n:
     zh:
-      description: 'DeepSeek 主编调度多 Agent 协同生产新媒体图文：主编拆解需求，文案AI 写作，配图AI 检索配图。'
+      description: '多 Agent 协同的新媒体图文生产：主编拆解需求，文案AI 写作，配图AI 检索配图。可对接任意 OpenAI 兼容大模型。'
       readme: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/README_zh.md'
   categories:
     - ai
@@ -27,19 +27,37 @@ spec:
       value: ai-media-team-${{ random(8) }}
   inputs:
     LLM_API_KEY:
-      description: '大模型 API Key（DeepSeek 或任意 OpenAI 兼容服务）。必填。'
+      description: '大模型 API Key（OpenAI 兼容服务或自建推理网关）。必填。'
       type: string
       required: true
     LLM_BASE_URL:
-      description: '大模型接口地址，默认 DeepSeek 官方地址。'
+      description: '大模型接口地址，必须是 Sealos 集群能访问到的 OpenAI 兼容地址，例如 https://gw.example.com/v1。内网地址从公网集群连不通。'
       type: string
-      default: 'https://api.deepseek.com/v1'
       required: true
     LLM_MODEL:
-      description: '模型名称，例如 deepseek-chat。'
+      description: '实际调用的模型名，例如 deepseek-flash。'
       type: string
-      default: 'deepseek-chat'
       required: true
+    LLM_DISPLAY_NAME:
+      description: '对外展示的模型名（可选）。留空则与 LLM_MODEL 相同；适用于实际 model 是网关别名、但界面想展示更友好名称的场景。'
+      type: string
+      default: ''
+      required: false
+    LLM_TEMPERATURE:
+      description: '采样温度。注意：部分推理模型只接受 1.0，传其他值会被服务端拒绝；常规情况建议 0.3~0.8。'
+      type: string
+      default: '0.7'
+      required: false
+    LLM_MAX_TOKENS:
+      description: '正文生成的最大输出 token 数。推理模型的 thinking token 同样计入，预算太小会导致正文为空。'
+      type: string
+      default: '4096'
+      required: false
+    LLM_MAX_TOKENS_EXTRACT:
+      description: '配图实体抽取的最大输出 token 数。上限只是天花板，不影响实际计费。'
+      type: string
+      default: '1024'
+      required: false
     PEXELS_API_KEY:
       description: 'Pexels 图库 API Key（免费申请 https://www.pexels.com/api/）。必填。'
       type: string
@@ -86,6 +104,14 @@ spec:
               value: ${{ inputs.LLM_BASE_URL }}
             - name: LLM_MODEL
               value: ${{ inputs.LLM_MODEL }}
+            - name: LLM_DISPLAY_NAME
+              value: ${{ inputs.LLM_DISPLAY_NAME }}
+            - name: LLM_TEMPERATURE
+              value: ${{ inputs.LLM_TEMPERATURE }}
+            - name: LLM_MAX_TOKENS
+              value: ${{ inputs.LLM_MAX_TOKENS }}
+            - name: LLM_MAX_TOKENS_EXTRACT
+              value: ${{ inputs.LLM_MAX_TOKENS_EXTRACT }}
             - name: PEXELS_API_KEY
               value: ${{ inputs.PEXELS_API_KEY }}
             - name: MOCK_MODE

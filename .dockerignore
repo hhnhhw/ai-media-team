@@ -32,7 +32,6 @@ memory.db-journal
 # 文档与开发辅助（运行不需要）
 README.md
 LICENSE
-agent-config/
 test_fix.py
 *.log
 logs/
