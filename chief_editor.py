@@ -42,6 +42,7 @@ CHIEF_EDITOR_PROMPT = """你是一个自媒体团队的**主编"老编"**。你�
 - 示例：如果文章写"师傅手起刀落，108片枣红油亮的鸭肉整整齐齐码好"，提取"北京烤鸭, 全聚德烤鸭师傅切片, 枣红油亮鸭皮, 荷叶饼卷鸭肉"
 - **严禁**：使用文章标题作为 prompt、使用抽象词（如"美食""文化""体验"）、添加文章未提及的地点
 - style: 固定 **"真实摄影"**
+- context: 同时把**文章正文开头 1~2 句**作为 context 传入，帮助配图AI用视觉模型判断图片与正文是否匹配
 
 ### 第四步：整合呈现
 将文案和配图整合成一篇完整的推文预览，包括：
@@ -75,7 +76,7 @@ class StepCaptureMiddleware(AgentMiddleware):
         elif "generate_illustration" in tool_str:
             if tool_str not in self._called_tools:
                 self.steps.append({"agent": "主编", "msg": "文章写好了！让配图AI搜索配图..."})
-            self.steps.append({"agent": "配图AI", "msg": "收到！正在提取关键实体，Pexels 搜索图片..."})
+            self.steps.append({"agent": "配图AI", "msg": "收到！正在多源搜索图片，并用视觉模型精选..."})
 
         self._called_tools.add(tool_str)
         result = handler(request)

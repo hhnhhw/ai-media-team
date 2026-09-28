@@ -1,6 +1,6 @@
 """
 AI 新媒体小编团队 —— Streamlit 主界面
-LLM 主编调度 · 文案AI写作 · Pexels 配图
+LLM 主编调度 · 文案AI写作 · 多源搜索配图
 """
 import streamlit as st
 import time
@@ -118,7 +118,7 @@ with st.sidebar:
 
     # 模式提示（模型名取自配置，换模型无需改代码）
     if not LLM_MOCK:
-        st.success(f"🚀 **Live 模式** — `{LLM_DISPLAY_NAME}` 驱动\n\n✍️ 文案AI：智能写作\n🎨 配图AI：Pexels 多关键词搜索 · 各取首位")
+        st.success(f"🚀 **Live 模式** — `{LLM_DISPLAY_NAME}` 驱动\n\n✍️ 文案AI：智能写作\n🎨 配图AI：多源网络搜索 + 视觉模型精选")
     else:
         st.info("📌 **Mock 演示模式** — 配置 `.env` 中的 LLM_API_KEY 即可启用")
 
@@ -154,13 +154,13 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-    st.caption(f"{LLM_DISPLAY_NAME} + Pexels + LangChain + Streamlit")
+    st.caption(f"{LLM_DISPLAY_NAME} + 多源配图 + LangChain + Streamlit")
 
 # ── 主标题 ────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
     <h1>📰 AI 新媒体小编团队</h1>
-    <p>LLM 主编调度 · AI 智能写作 · Pexels 多关键词配图</p>
+    <p>LLM 主编调度 · AI 智能写作 · 多源搜索 + 视觉精选配图</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -298,9 +298,9 @@ def run_chief_editor_mock(user_input: str) -> dict:
     with progress_placeholder.container():
         st.markdown(f'<div class="agent-thinking">🧠 <b>主编智能体</b>：文章很棒！现在 @配图AI 根据「{title[:30]}...」生成配图。</div>', unsafe_allow_html=True)
         time.sleep(0.3)
-        st.markdown(f'<div class="agent-illustrator">🎨 <b>配图AI（小图）</b>：收到！提取关键实体，Pexels 多关键词搜索...</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="agent-illustrator">🎨 <b>配图AI（小图）</b>：收到！提取关键实体，多源网络搜索...</div>', unsafe_allow_html=True)
     steps.append({"agent": "主编", "msg": f"@配图AI 根据「{title[:30]}...」搜索配图"})
-    steps.append({"agent": "配图AI", "msg": "提取关键实体，多关键词搜索..."})
+    steps.append({"agent": "配图AI", "msg": "提取关键实体，多源搜索..."})
 
     time.sleep(1.0)
 
@@ -318,7 +318,7 @@ def run_chief_editor_mock(user_input: str) -> dict:
     image_url = image_data.get("image_url", "https://picsum.photos/seed/fallback/1024/1024")
 
     with progress_placeholder.container():
-        st.markdown('<div class="agent-illustrator">🎨 <b>配图AI（小图）</b>：Pexels 多关键词搜索完成 ✅</div>', unsafe_allow_html=True)
+        st.markdown('<div class="agent-illustrator">🎨 <b>配图AI（小图）</b>：配图搜索完成 ✅</div>', unsafe_allow_html=True)
     steps.append({"agent": "配图AI", "msg": "多关键词搜索完毕！"})
 
     time.sleep(0.3)
@@ -394,7 +394,7 @@ def run_chief_editor_langchain(user_input: str):
                             unsafe_allow_html=True)
                     elif "generate_illustration" in tool_name:
                         progress_area.markdown(
-                            '<div class="agent-illustrator">🎨 <b>配图AI</b>：Pexels 多关键词搜索...</div>',
+                            '<div class="agent-illustrator">🎨 <b>配图AI</b>：多源网络搜索...</div>',
                             unsafe_allow_html=True)
 
             # ── 工具结果 ──────────────────────────────────
@@ -522,9 +522,10 @@ if prompt := st.chat_input("输入你想写的主题，比如：帮我写一篇�
                     all_img_urls.append(m.group(1))
             # 4) 如果以上都没找到，提取所有 https:// 开头的URL中看起来像图片的
             if not all_img_urls:
+                _IMG_DOMAINS = ('pexels.com', 'unsplash.com', 'pixabay.com', 'image.baidu.com', 'baidu.com')
                 all_img_urls += [u for u in re.findall(r'https?://[^\s\n"\)]+', raw)
                                 if any(u.lower().endswith(e) for e in ('.jpg','.jpeg','.png','.webp'))
-                                or 'pexels.com' in u or 'unsplash.com' in u]
+                                or any(d in u.lower() for d in _IMG_DOMAINS)]
             # 去重保持顺序
             seen = set()
             all_img_urls = [u for u in all_img_urls if u not in seen and not seen.add(u)]
@@ -546,7 +547,7 @@ if prompt := st.chat_input("输入你想写的主题，比如：帮我写一篇�
             article_title = title_match.group(1).strip() if title_match else prompt[:40]
             save_article(conv_id, article_title, raw)
             for img_url in all_img_urls[:5]:
-                save_image_record(conv_id, "", img_url, "Pexels")
+                save_image_record(conv_id, "", img_url, "网络搜索")
             final_msg = raw
 
         # ── 保存消息 ──────────────────────────────────────────
@@ -590,4 +591,4 @@ if prompt := st.chat_input("输入你想写的主题，比如：帮我写一篇�
 
 # ── 底部 ──────────────────────────────────────────────────────
 st.divider()
-st.caption(f"🤖 AI新媒体小编团队 | {LLM_DISPLAY_NAME} + Pexels + LangChain + Streamlit")
+st.caption(f"🤖 AI新媒体小编团队 | {LLM_DISPLAY_NAME} + 多源配图 + LangChain + Streamlit")

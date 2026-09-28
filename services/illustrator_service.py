@@ -1,8 +1,16 @@
 """
 配图AI微服务 — Port 8002
-Pexels API 多关键词搜索 → 每词取首位 → 返回最匹配图片
+多源网络搜索（Pexels / Unsplash / Pixabay / 百度图片）→ 多模态视觉模型语义精选
+流程：
+  1. 从文章实体列表提取关键词（已是实体列表则直接使用，否则交给 LLM 抽取）
+  2. 每个关键词并发搜索多个图源，合并去重得到候选池
+  3. 若配置了视觉模型（VISION_MODEL），把候选图连同文章内容一起交给它，
+     按「与正文的相关性」重新排序，挑出最贴合的前 N 张
+  4. 全程降级：视觉模型失败 → 关键词顺序；无候选 → Unsplash 内置兜底图库
 """
 import sys, os, re, hashlib, requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Callable
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import uvicorn
@@ -18,15 +26,26 @@ if sys.platform == "win32":
 
 from config import (
     LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, IMAGE_MOCK, ILLUSTRATOR_PORT,
-    PEXELS_API_KEY, LLM_TEMPERATURE, LLM_MAX_TOKENS_EXTRACT, LLM_DISPLAY_NAME,
+    LLM_TEMPERATURE, LLM_MAX_TOKENS_EXTRACT, LLM_DISPLAY_NAME,
+    PEXELS_API_KEY, UNSPLASH_API_KEY, PIXABAY_API_KEY,
+    IMAGE_SOURCE_PEXELS, IMAGE_SOURCE_UNSPLASH, IMAGE_SOURCE_PIXABAY, IMAGE_SOURCE_BAIDU,
+    VISION_MODEL, VISION_API_KEY, VISION_BASE_URL, VISION_ENABLED,
 )
 from llm_utils import chat_text
 
 app = FastAPI(title="配图AI服务")
 
+# 交给视觉模型做精选时，最多送入的候选图数量（视觉调用有图片上限且逐张计费）
+MAX_VISION_IMAGES = 8
+# 每个图源、每个关键词的搜索条数
+PER_SOURCE_COUNT = 4
+# 最终返回的图片数量
+TOP_K = 3
+
 class DrawRequest(BaseModel):
     prompt: str = Field(..., description="文章主题或实体列表")
     style: str = Field(default="真实摄影", description="图片风格偏好")
+    context: str = Field(default="", description="文章正文节选，用于视觉模型判断相关性")
 
 class DrawResponse(BaseModel):
     success: bool
@@ -53,8 +72,16 @@ def _is_entity_list(text: str) -> bool:
     avg = sum(len(p) for p in parts) / len(parts)
     return short / len(parts) > 0.6 and avg < 25 and ch / len(parts) > 0.3
 
+def _normalize_url(u: str) -> str:
+    """补全协议相对地址（如 //xxx → https://xxx）"""
+    if not u:
+        return ""
+    if u.startswith("//"):
+        return "https:" + u
+    return u
+
 # ═══════════════════════════════════════════════════════════════
-# Unsplash 兜底图库
+# Unsplash 兜底图库（没有任何图源可用 / 搜索为空时的最后防线）
 # ═══════════════════════════════════════════════════════════════
 
 _FALLBACK = {
@@ -111,11 +138,12 @@ def _pick_fallback(prompt: str) -> str:
     return urls[int(hashlib.md5(prompt.encode()).hexdigest(), 16) % len(urls)]
 
 # ═══════════════════════════════════════════════════════════════
-# Pexels API 搜索
+# 多源图片搜索
+# 每个函数签名统一：_search_xxx(query, count) -> list[dict]
+# dict 结构：{"url", "alt", "photographer", "id"}
 # ═══════════════════════════════════════════════════════════════
 
-def _search_pexels(query: str, count: int = 15) -> list[dict]:
-    """搜索 Pexels，返回 [{url, alt, photographer, id}]"""
+def _search_pexels(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
     if not PEXELS_API_KEY:
         return []
     try:
@@ -138,6 +166,103 @@ def _search_pexels(query: str, count: int = 15) -> list[dict]:
         print(f"[配图AI] Pexels 失败: {e}")
         return []
 
+def _search_unsplash(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
+    if not UNSPLASH_API_KEY:
+        return []
+    try:
+        resp = requests.get(
+            "https://api.unsplash.com/search/photos",
+            params={"query": query, "per_page": count, "orientation": "landscape"},
+            headers={"Authorization": f"Client-ID {UNSPLASH_API_KEY}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        photos = []
+        for p in resp.json().get("results", []):
+            url = p.get("urls", {}).get("regular") or p.get("urls", {}).get("full") or ""
+            if url:
+                photos.append({"url": url,
+                               "alt": (p.get("alt_description") or p.get("description") or "").strip(),
+                               "photographer": (p.get("user", {}) or {}).get("name", ""), "id": str(p.get("id", ""))})
+        print(f"[配图AI] Unsplash '{query[:30]}' → {len(photos)} 张")
+        return photos
+    except Exception as e:
+        print(f"[配图AI] Unsplash 失败: {e}")
+        return []
+
+def _search_pixabay(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
+    if not PIXABAY_API_KEY:
+        return []
+    try:
+        resp = requests.get(
+            "https://pixabay.com/api/",
+            params={"key": PIXABAY_API_KEY, "q": query, "per_page": count,
+                    "image_type": "photo", "orientation": "horizontal", "safesearch": "true"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        photos = []
+        for p in resp.json().get("hits", []):
+            url = p.get("webformatURL") or p.get("largeImageURL") or ""
+            if url:
+                photos.append({"url": url, "alt": (p.get("tags") or "").strip(),
+                               "photographer": p.get("user", ""), "id": str(p.get("id", ""))})
+        print(f"[配图AI] Pixabay '{query[:30]}' → {len(photos)} 张")
+        return photos
+    except Exception as e:
+        print(f"[配图AI] Pixabay 失败: {e}")
+        return []
+
+def _search_baidu(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
+    """百度图片搜索（免 key）。抓取 image.baidu.com 的 JSON 接口，返回百度 CDN 缩略图 URL。
+
+    说明：这是网页抓取，稳定性不如官方 API；失败会静默返回空列表，由其他图源兜底。
+    """
+    try:
+        params = {
+            "tn": "resultjson_com",
+            "ipn": "rj",
+            "word": query,
+            "pn": 0,
+            "rn": count,
+            "ie": "utf-8",
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://image.baidu.com/",
+            "Accept": "application/json, text/plain, */*",
+        }
+        resp = requests.get("https://image.baidu.com/search/acjson", params=params, headers=headers, timeout=15)
+        resp.raise_for_status()
+        photos = []
+        for item in resp.json().get("data", []):
+            if not isinstance(item, dict):
+                continue
+            url = _normalize_url(item.get("middleURL") or item.get("thumbURL") or "")
+            if not url:
+                continue
+            alt = item.get("fromPageTitleEnc") or item.get("fromPageTitle") or ""
+            photos.append({"url": url, "alt": str(alt).strip(), "photographer": "", "id": str(item.get("id", ""))})
+        print(f"[配图AI] 百度图片 '{query[:30]}' → {len(photos)} 张")
+        return photos
+    except Exception as e:
+        print(f"[配图AI] 百度图片失败: {e}")
+        return []
+
+def _enabled_sources() -> list[tuple[str, Callable]]:
+    """返回当前启用的图源列表 [(名称, 搜索函数)]，按优先级排序。"""
+    sources = []
+    if IMAGE_SOURCE_PEXELS and PEXELS_API_KEY:
+        sources.append(("Pexels", _search_pexels))
+    if IMAGE_SOURCE_UNSPLASH and UNSPLASH_API_KEY:
+        sources.append(("Unsplash", _search_unsplash))
+    if IMAGE_SOURCE_PIXABAY and PIXABAY_API_KEY:
+        sources.append(("Pixabay", _search_pixabay))
+    if IMAGE_SOURCE_BAIDU:
+        sources.append(("百度", _search_baidu))
+    return sources
+
 # ═══════════════════════════════════════════════════════════════
 # 关键词提取
 # ═══════════════════════════════════════════════════════════════
@@ -149,7 +274,6 @@ def _extract_keywords(prompt: str) -> list[str]:
         print(f"[配图AI] 实体: {entities[:5]}")
         return entities[:5]
 
-    # 文章描述 → LLM 提取
     client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
     try:
         text = chat_text(
@@ -168,6 +292,50 @@ def _extract_keywords(prompt: str) -> list[str]:
     return [prompt[:40]]
 
 # ═══════════════════════════════════════════════════════════════
+# 多模态视觉精选
+# ═══════════════════════════════════════════════════════════════
+
+def _select_with_vision(context: str, prompt: str, candidates: list[dict]) -> list[dict]:
+    """用视觉模型对候选图打分，返回按相关性排序后的候选列表。
+
+    把文章内容 + 至多 MAX_VISION_IMAGES 张候选图一起发给视觉模型，
+    让它选出最贴合正文的 TOP_K 张。选中的排前面，其余按原顺序追加在后。
+    """
+    client = OpenAI(api_key=VISION_API_KEY, base_url=VISION_BASE_URL)
+    cands = candidates[:MAX_VISION_IMAGES]
+    tail = candidates[MAX_VISION_IMAGES:]
+
+    instruction = (
+        "你是文章配图审核员。请根据文章内容，从下面的候选图片中选出最相关的3张。\n"
+        f"文章内容：{(context or prompt)[:800]}\n"
+        "要求：只输出被选中图片的编号，用逗号分隔，例如：1,3,5。不要输出任何其他文字。"
+    )
+    content = [{"type": "text", "text": instruction}]
+    for i, c in enumerate(cands, 1):
+        content.append({"type": "image_url", "image_url": {"url": c["url"]}})
+        content.append({"type": "text", "text": f"[图{i}]"})
+
+    resp = client.chat.completions.create(
+        model=VISION_MODEL,
+        messages=[{"role": "user", "content": content}],
+        max_tokens=200,
+    )
+    text = (resp.choices[0].message.content or "").strip()
+    print(f"[配图AI] 视觉精选输出: {text[:80]}")
+
+    ordered, chosen = [], set()
+    for x in re.findall(r"\d+", text):
+        n = int(x)
+        if 1 <= n <= len(cands) and n not in chosen:
+            chosen.add(n)
+            ordered.append(cands[n - 1])
+    # 未被选中的候选按原顺序补齐，保证总有结果
+    for i, c in enumerate(cands, 1):
+        if i not in chosen:
+            ordered.append(c)
+    return ordered + tail
+
+# ═══════════════════════════════════════════════════════════════
 # 主接口
 # ═══════════════════════════════════════════════════════════════
 
@@ -181,44 +349,66 @@ def generate(req: DrawRequest):
     prompt = req.prompt
 
     # 1. 提取关键词
-    keywords = _extract_keywords(prompt)
-    if not keywords:
-        keywords = [prompt[:40]]
+    keywords = _extract_keywords(prompt) or [prompt[:40]]
     print(f"[配图AI] 关键词({len(keywords)}): {keywords}")
 
-    # 2. 每个关键词搜 Pexels，取各自排名第1的图片
-    urls = []
-    seen = set()
-    for kw in keywords[:3]:
-        photos = _search_pexels(kw, count=3)
-        for p in photos:
-            url = p.get("url", "")
-            if url and url not in seen:
-                seen.add(url)
-                urls.append(url)
-                print(f"[配图AI] '{kw}' -> Pexels#{p.get('id','?')}")
-                break  # 只取该关键词的第1名
+    # 2. 多源并发搜索，按关键词顺序合并去重
+    sources = _enabled_sources()
+    per_kw = {kw: [] for kw in keywords[:3]}
+    if sources:
+        tasks = [(kw, name, fn) for kw in keywords[:3] for name, fn in sources]
+        with ThreadPoolExecutor(max_workers=min(12, len(tasks))) as ex:
+            futs = {ex.submit(fn, kw, PER_SOURCE_COUNT): (kw, name) for kw, name, fn in tasks}
+            for fut in as_completed(futs):
+                kw, name = futs[fut]
+                try:
+                    for p in fut.result():
+                        p["_source"] = name
+                        per_kw[kw].append(p)
+                except Exception as e:
+                    print(f"[配图AI] 搜索异常 ({name}/{kw[:20]}): {e}")
 
-    # 3. 兜底
-    if not urls:
+    candidates, seen = [], set()
+    for kw in keywords[:3]:
+        for p in per_kw[kw]:
+            u = p.get("url", "")
+            if u and u not in seen:
+                seen.add(u)
+                candidates.append(p)
+    print(f"[配图AI] 候选池 {len(candidates)} 张（来自 {len(sources)} 个图源）")
+
+    # 3. 多模态语义精选（失败则保持关键词顺序）
+    source_note = "关键词相关性排序"
+    if VISION_ENABLED and candidates:
+        try:
+            candidates = _select_with_vision(req.context, prompt, candidates)
+            source_note = "视觉模型语义精选"
+        except Exception as e:
+            print(f"[配图AI] 视觉精选失败，回退关键词顺序: {e}")
+
+    # 4. 兜底
+    if not candidates:
         url = _pick_fallback(prompt)
         return DrawResponse(success=True, image_url=url, image_urls=[url],
                           prompt_used=prompt, search_query=", ".join(keywords[:3]),
                           source="Unsplash 降级图库")
 
+    urls = [c["url"] for c in candidates[:TOP_K]]
+    src_names = list(dict.fromkeys(c.get("_source", "") for c in candidates if c.get("_source")))
     print(f"[配图AI] 输出 {len(urls)} 张")
-    return DrawResponse(success=True, image_url=urls[0], image_urls=urls[:3],
+    return DrawResponse(success=True, image_url=urls[0], image_urls=urls,
                       prompt_used=prompt, search_query=", ".join(keywords[:3]),
-                      source=f"Pexels ({len(urls)} 张)")
+                      source=f"{'+'.join(src_names)} · {source_note}")
 
 @app.get("/health")
 def health():
     return {"status": "ok", "mode": "mock" if IMAGE_MOCK else "live",
             "model": LLM_DISPLAY_NAME,
             "upstream_model": LLM_MODEL,
-            "search": f"Pexels API + {LLM_DISPLAY_NAME} 智能筛选"}
+            "vision_model": VISION_MODEL or "未启用",
+            "search": f"多源图库 + 百度图片，{'视觉精选' if VISION_ENABLED else '关键词排序'}，降级 Unsplash"}
 
 if __name__ == "__main__":
-    print(f"🎨 配图AI服务 → http://127.0.0.1:{ILLUSTRATOR_PORT}  |  "
-          f"{'MOCK' if IMAGE_MOCK else f'Pexels + {LLM_DISPLAY_NAME}'}")
+    mode = "MOCK" if IMAGE_MOCK else f"多源搜索{' + 视觉精选' if VISION_ENABLED else ''}"
+    print(f"🎨 配图AI服务 → http://127.0.0.1:{ILLUSTRATOR_PORT}  |  {mode}")
     uvicorn.run(app, host="0.0.0.0", port=ILLUSTRATOR_PORT, log_level="info")

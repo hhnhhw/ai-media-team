@@ -8,7 +8,7 @@ from config import ILLUSTRATOR_URL
 
 
 @tool
-def generate_illustration(prompt: str, style: str = "真实摄影") -> str:
+def generate_illustration(prompt: str, style: str = "真实摄影", context: str = "") -> str:
     """
     搜索互联网上的真实照片/图片作为文章配图。当你需要为文章配图时使用此工具。
 
@@ -20,14 +20,15 @@ def generate_illustration(prompt: str, style: str = "真实摄影") -> str:
     Args:
         prompt: 文章中的具体实体列表（逗号分隔的中文实体名词），越具体搜索结果越精准
         style: 图片风格，默认"真实摄影"搜索真实照片
+        context: （可选）文章正文的开头 1~2 句节选，用于视觉模型判断图片与正文是否匹配
 
     Returns:
-        来自搜索引擎的真实图片URL
+        来自多源网络搜索并经视觉模型精选后的真实图片URL
     """
     try:
         resp = requests.post(
             f"{ILLUSTRATOR_URL}/generate",
-            json={"prompt": prompt, "style": style},
+            json={"prompt": prompt, "style": style, "context": context},
             timeout=180,
         )
         resp.raise_for_status()
@@ -36,7 +37,7 @@ def generate_illustration(prompt: str, style: str = "真实摄影") -> str:
             urls = data.get("image_urls", [data["image_url"]])
             url_list = "\n".join(f"- {u}" for u in urls[:3])
             return (
-                f"✅ 配图搜索成功！（来源：{data.get('source', 'Bing')}，搜索词：{data.get('search_query', prompt)}）\n"
+                f"✅ 配图搜索成功！（来源：{data.get('source', '多源搜索')}，搜索词：{data.get('search_query', prompt)}）\n"
                 f"主图：{data['image_url']}\n"
                 f"备选图片：\n{url_list}"
             )
