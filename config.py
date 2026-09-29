@@ -45,20 +45,10 @@ LLM_MAX_TOKENS = _env_int("LLM_MAX_TOKENS", 4096)
 # 上限只是"天花板"而非实际消耗，调大不会增加费用。
 LLM_MAX_TOKENS_EXTRACT = _env_int("LLM_MAX_TOKENS_EXTRACT", 1024)
 
-# ── 图片搜索 API（多源）─────────────────────────────────────
-# 三个免费图库各自申请免费 key：
-#   Pexels   https://www.pexels.com/api/
-#   Unsplash https://unsplash.com/developers
-#   Pixabay  https://pixabay.com/api/docs/
+# ── 图片搜索 API ────────────────────────────────────────────
+# 目前仅接入 Pexels 一个官方图源（免费申请 https://www.pexels.com/api/）。
+# 未配置 key 时不会发请求，服务会退到内置兜底图库，保证仍有图可出。
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
-UNSPLASH_API_KEY = os.getenv("UNSPLASH_API_KEY", "")
-PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")
-
-# 各图源开关（默认开启；设为 false 可关闭）。
-# 图库源即使开关打开、但没有对应 key 时也不会发请求。
-IMAGE_SOURCE_PEXELS = os.getenv("IMAGE_SOURCE_PEXELS", "true").lower() != "false"
-IMAGE_SOURCE_UNSPLASH = os.getenv("IMAGE_SOURCE_UNSPLASH", "true").lower() != "false"
-IMAGE_SOURCE_PIXABAY = os.getenv("IMAGE_SOURCE_PIXABAY", "true").lower() != "false"
 
 # ── 多模态视觉模型（用于候选图语义精选）──────────────────────
 # 单独配置一个支持「图片输入」的视觉模型（如 GPT-4o / Qwen-VL / GLM-4V）。

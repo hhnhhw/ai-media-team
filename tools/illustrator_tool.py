@@ -23,7 +23,7 @@ def generate_illustration(prompt: str, style: str = "真实摄影", context: str
         context: （可选）文章正文的开头 1~2 句节选，用于视觉模型判断图片与正文是否匹配
 
     Returns:
-        来自多源网络搜索并经视觉模型精选后的真实图片URL
+        来自图库搜索并经视觉模型精选后的真实图片URL
     """
     try:
         resp = requests.post(
@@ -37,7 +37,7 @@ def generate_illustration(prompt: str, style: str = "真实摄影", context: str
             urls = data.get("image_urls", [data["image_url"]])
             url_list = "\n".join(f"- {u}" for u in urls[:3])
             return (
-                f"✅ 配图搜索成功！（来源：{data.get('source', '多源搜索')}，搜索词：{data.get('search_query', prompt)}）\n"
+                f"✅ 配图搜索成功！（来源：{data.get('source', '图库搜索')}，搜索词：{data.get('search_query', prompt)}）\n"
                 f"主图：{data['image_url']}\n"
                 f"备选图片：\n{url_list}"
             )

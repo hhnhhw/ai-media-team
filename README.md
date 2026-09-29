@@ -1,6 +1,6 @@
 # 📰 AI 新媒体小编团队
 
-> **LLM 主编调度 · AI 智能写作 · 多源网络搜索 + 多模态视觉精选配图**
+> **LLM 主编调度 · AI 智能写作 · 图库搜索 + 多模态视觉精选配图**
 >
 > 一个由多个 AI Agent 协同工作的新媒体内容生产系统：**主编**理解需求并拆解任务，**文案AI**负责写作，**配图AI**负责配图，最终交付图文并茂的成稿。
 
@@ -10,7 +10,7 @@
 
 - 🧠 **主编智能体调度** — 基于 LangChain `create_agent`，自主分析需求、拆解任务、按序调用下属 Agent
 - ✍️ **多平台风格适配** — 公众号 / 小红书 / 抖音 / 微博，支持幽默、文艺、专业、种草等多种文风
-- 🎨 **多源网络搜索 + 视觉精选配图** — 从正文逐句扫描可拍摄实体名词，并发搜索 Pexels / Unsplash / Pixabay，再用视觉大模型按「与正文的匹配度」从候选图里挑出最贴题的那几张
+- 🎨 **网络搜索 + 视觉精选配图** — 从正文逐句扫描可拍摄实体名词，并发检索 Pexels 图库，再用视觉大模型按「与正文的匹配度」从候选图里挑出最贴题的那几张
 - 💬 **对话历史持久化** — SQLite 存储会话与消息，跨 Streamlit 会话保留上下文
 - 📡 **微服务架构** — 文案 / 配图各自独立 FastAPI 服务，可单独部署到云端
 - 🔌 **Mock 演示模式** — 未配置 API Key 时自动降级为内置示例数据，零成本跑通全流程
@@ -42,7 +42,7 @@
                        │                      │
                        ▼                      ▼
               ┌──────────────────┐  ┌──────────────────┐
-              │ OpenAI 兼容 LLM   │  │ 多源图库          │
+              │ OpenAI 兼容 LLM   │  │ Pexels 图库       │
               │  兼容 LLM 接口    │  │  + 视觉模型精选  │
               └──────────────────┘  └──────────────────┘
                        │                      │
@@ -62,7 +62,7 @@
 
 - Python **3.10+**
 - **任意 OpenAI 兼容**大模型服务的 API Key（官方 API、云厂商托管服务或自建推理网关均可）
-- 图库 API Key（免费申请，可选但推荐）：[Pexels](https://www.pexels.com/api/) / [Unsplash](https://unsplash.com/developers) / [Pixabay](https://pixabay.com/api/docs/)
+- 图库 API Key（免费申请）：[Pexels](https://www.pexels.com/api/) —— 目前唯一的图源，强烈建议配置
 - （可选）一个支持**图片输入**的视觉模型（如 GPT-4o / Qwen-VL / GLM-4V），用于候选图语义精选
 
 ### 1. 克隆并创建虚拟环境
@@ -110,10 +110,8 @@ LLM_MODEL=your-model-name
 # LLM_MAX_TOKENS=4096
 # LLM_MAX_TOKENS_EXTRACT=1024
 
-# 多源图库（免费申请，填几个用几个；至少配一个）
+# 图库（免费申请 https://www.pexels.com/api/）—— 目前唯一的图源
 PEXELS_API_KEY=your-pexels-api-key-here
-UNSPLASH_API_KEY=
-PIXABAY_API_KEY=
 
 # 可选：多模态视觉模型（从候选图里挑最贴合正文的，留空则退化为关键词排序）
 # VISION_MODEL=gpt-4o
@@ -278,7 +276,7 @@ curl http://127.0.0.1:8002/health
 | Agent 编排 | LangChain (`create_agent`) |
 | 微服务 | FastAPI + Uvicorn |
 | 大模型 | 任意 OpenAI 兼容接口（`LLM_MODEL` / `LLM_BASE_URL` / `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_DISPLAY_NAME` 均可配置） |
-| 图片检索 | 多源网络搜索：Pexels / Unsplash / Pixabay（并发 + 自动降级） |
+| 图片检索 | Pexels 图库（并发检索 + 自动降级到内置兜底图库） |
 | 图片精选 | 多模态视觉模型（`VISION_MODEL`，可选，未配置时按关键词排序） |
 | 持久化 | SQLite (WAL) |
 

@@ -7,7 +7,7 @@ spec:
   url: 'https://github.com/hhnhhw/ai-media-team'
   gitRepo: 'https://github.com/hhnhhw/ai-media-team'
   author: 'hhnhhw'
-  description: '多 Agent 协同的新媒体图文生产：主编拆解需求，文案AI 写作，配图AI 多源网络搜索 + 视觉模型精选配图。LangChain + FastAPI + Streamlit，可对接任意 OpenAI 兼容大模型。'
+  description: '多 Agent 协同的新媒体图文生产：主编拆解需求，文案AI 写作，配图AI 图库搜索 + 视觉模型精选配图。LangChain + FastAPI + Streamlit，可对接任意 OpenAI 兼容大模型。'
   readme: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/README.md'
   icon: 'https://raw.githubusercontent.com/labring-actions/templates/kb-0.9/template/ai-media-team/logo.png'
   templateType: inline
@@ -59,17 +59,7 @@ spec:
       default: '1024'
       required: false
     PEXELS_API_KEY:
-      description: 'Pexels 图库 API Key（免费申请 https://www.pexels.com/api/）。可选，多图源之一；建议至少配置一个图库 key。'
-      type: string
-      default: ''
-      required: false
-    UNSPLASH_API_KEY:
-      description: 'Unsplash 图库 API Key（免费申请 https://unsplash.com/developers）。可选。'
-      type: string
-      default: ''
-      required: false
-    PIXABAY_API_KEY:
-      description: 'Pixabay 图库 API Key（免费申请 https://pixabay.com/api/docs/）。可选。'
+      description: 'Pexels 图库 API Key（免费申请 https://www.pexels.com/api/）。唯一的图源，强烈建议配置；留空则只返回内置兜底图库的图片。'
       type: string
       default: ''
       required: false
@@ -140,10 +130,6 @@ spec:
               value: ${{ inputs.LLM_MAX_TOKENS_EXTRACT }}
             - name: PEXELS_API_KEY
               value: ${{ inputs.PEXELS_API_KEY }}
-            - name: UNSPLASH_API_KEY
-              value: ${{ inputs.UNSPLASH_API_KEY }}
-            - name: PIXABAY_API_KEY
-              value: ${{ inputs.PIXABAY_API_KEY }}
             - name: VISION_MODEL
               value: ${{ inputs.VISION_MODEL }}
             - name: VISION_API_KEY

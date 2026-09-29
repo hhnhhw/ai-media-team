@@ -76,7 +76,7 @@ class StepCaptureMiddleware(AgentMiddleware):
         elif "generate_illustration" in tool_str:
             if tool_str not in self._called_tools:
                 self.steps.append({"agent": "主编", "msg": "文章写好了！让配图AI搜索配图..."})
-            self.steps.append({"agent": "配图AI", "msg": "收到！正在多源搜索图片，并用视觉模型精选..."})
+            self.steps.append({"agent": "配图AI", "msg": "收到！正在搜索图库，并用视觉模型精选..."})
 
         self._called_tools.add(tool_str)
         result = handler(request)

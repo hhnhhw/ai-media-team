@@ -1,12 +1,12 @@
 """
 配图AI微服务 — Port 8002
-多源网络搜索（Pexels / Unsplash / Pixabay）→ 多模态视觉模型语义精选
+图片搜索（Pexels）→ 多模态视觉模型语义精选
 流程：
   1. 从文章实体列表提取关键词（已是实体列表则直接使用，否则交给 LLM 抽取）
-  2. 每个关键词并发搜索多个图源，合并去重得到候选池
+  2. 每个关键词并发搜索图源，合并去重得到候选池
   3. 若配置了视觉模型（VISION_MODEL），把候选图连同文章内容一起交给它，
      按「与正文的相关性」重新排序，挑出最贴合的前 N 张
-  4. 全程降级：视觉模型失败 → 关键词顺序；无候选 → Unsplash 内置兜底图库
+  4. 全程降级：视觉模型失败 → 关键词顺序；无候选 → 内置兜底图库
 """
 import sys, os, re, hashlib, requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -27,8 +27,7 @@ if sys.platform == "win32":
 from config import (
     LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, IMAGE_MOCK, ILLUSTRATOR_PORT,
     LLM_TEMPERATURE, LLM_MAX_TOKENS_EXTRACT, LLM_DISPLAY_NAME,
-    PEXELS_API_KEY, UNSPLASH_API_KEY, PIXABAY_API_KEY,
-    IMAGE_SOURCE_PEXELS, IMAGE_SOURCE_UNSPLASH, IMAGE_SOURCE_PIXABAY,
+    PEXELS_API_KEY,
     VISION_MODEL, VISION_API_KEY, VISION_BASE_URL, VISION_ENABLED,
 )
 from llm_utils import chat_text
@@ -81,7 +80,8 @@ def _normalize_url(u: str) -> str:
     return u
 
 # ═══════════════════════════════════════════════════════════════
-# Unsplash 兜底图库（没有任何图源可用 / 搜索为空时的最后防线）
+# 内置兜底图库（未配置图源 key / 搜索为空时的最后防线）
+# 这些是固定的 Unsplash CDN 图片直链，不调用任何 API、不需要 key。
 # ═══════════════════════════════════════════════════════════════
 
 _FALLBACK = {
@@ -138,7 +138,7 @@ def _pick_fallback(prompt: str) -> str:
     return urls[int(hashlib.md5(prompt.encode()).hexdigest(), 16) % len(urls)]
 
 # ═══════════════════════════════════════════════════════════════
-# 多源图片搜索
+# 图片搜索
 # 每个函数签名统一：_search_xxx(query, count) -> list[dict]
 # dict 结构：{"url", "alt", "photographer", "id"}
 # ═══════════════════════════════════════════════════════════════
@@ -166,63 +166,15 @@ def _search_pexels(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
         print(f"[配图AI] Pexels 失败: {e}")
         return []
 
-def _search_unsplash(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
-    if not UNSPLASH_API_KEY:
-        return []
-    try:
-        resp = requests.get(
-            "https://api.unsplash.com/search/photos",
-            params={"query": query, "per_page": count, "orientation": "landscape"},
-            headers={"Authorization": f"Client-ID {UNSPLASH_API_KEY}"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        photos = []
-        for p in resp.json().get("results", []):
-            url = p.get("urls", {}).get("regular") or p.get("urls", {}).get("full") or ""
-            if url:
-                photos.append({"url": url,
-                               "alt": (p.get("alt_description") or p.get("description") or "").strip(),
-                               "photographer": (p.get("user", {}) or {}).get("name", ""), "id": str(p.get("id", ""))})
-        print(f"[配图AI] Unsplash '{query[:30]}' → {len(photos)} 张")
-        return photos
-    except Exception as e:
-        print(f"[配图AI] Unsplash 失败: {e}")
-        return []
-
-def _search_pixabay(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
-    if not PIXABAY_API_KEY:
-        return []
-    try:
-        resp = requests.get(
-            "https://pixabay.com/api/",
-            params={"key": PIXABAY_API_KEY, "q": query, "per_page": count,
-                    "image_type": "photo", "orientation": "horizontal", "safesearch": "true"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        photos = []
-        for p in resp.json().get("hits", []):
-            url = p.get("webformatURL") or p.get("largeImageURL") or ""
-            if url:
-                photos.append({"url": url, "alt": (p.get("tags") or "").strip(),
-                               "photographer": p.get("user", ""), "id": str(p.get("id", ""))})
-        print(f"[配图AI] Pixabay '{query[:30]}' → {len(photos)} 张")
-        return photos
-    except Exception as e:
-        print(f"[配图AI] Pixabay 失败: {e}")
-        return []
-
 def _enabled_sources() -> list[tuple[str, Callable]]:
-    """返回当前启用的图源列表 [(名称, 搜索函数)]，按优先级排序。"""
-    sources = []
-    if IMAGE_SOURCE_PEXELS and PEXELS_API_KEY:
-        sources.append(("Pexels", _search_pexels))
-    if IMAGE_SOURCE_UNSPLASH and UNSPLASH_API_KEY:
-        sources.append(("Unsplash", _search_unsplash))
-    if IMAGE_SOURCE_PIXABAY and PIXABAY_API_KEY:
-        sources.append(("Pixabay", _search_pixabay))
-    return sources
+    """返回当前启用的图源列表 [(名称, 搜索函数)]。
+
+    目前仅保留 Pexels 一个官方 API 图源。未配置 key 时返回空列表，
+    调用方会退到模块内置的兜底图库（_FALLBACK），保证仍有图可出。
+    """
+    if PEXELS_API_KEY:
+        return [("Pexels", _search_pexels)]
+    return []
 
 # ═══════════════════════════════════════════════════════════════
 # 关键词提取
@@ -305,7 +257,7 @@ def generate(req: DrawRequest):
     if IMAGE_MOCK:
         url = _pick_fallback(req.prompt)
         return DrawResponse(success=True, image_url=url, image_urls=[url],
-                          prompt_used=req.prompt, search_query="[Mock]", source="Unsplash (Mock)")
+                          prompt_used=req.prompt, search_query="[Mock]", source="兜底图库 (Mock)")
 
     prompt = req.prompt
 
@@ -313,7 +265,7 @@ def generate(req: DrawRequest):
     keywords = _extract_keywords(prompt) or [prompt[:40]]
     print(f"[配图AI] 关键词({len(keywords)}): {keywords}")
 
-    # 2. 多源并发搜索，按关键词顺序合并去重
+    # 2. 并发搜索，按关键词顺序合并去重
     sources = _enabled_sources()
     per_kw = {kw: [] for kw in keywords[:3]}
     if sources:
@@ -352,7 +304,7 @@ def generate(req: DrawRequest):
         url = _pick_fallback(prompt)
         return DrawResponse(success=True, image_url=url, image_urls=[url],
                           prompt_used=prompt, search_query=", ".join(keywords[:3]),
-                          source="Unsplash 降级图库")
+                          source="内置兜底图库")
 
     urls = [c["url"] for c in candidates[:TOP_K]]
     src_names = list(dict.fromkeys(c.get("_source", "") for c in candidates if c.get("_source")))
@@ -367,9 +319,9 @@ def health():
             "model": LLM_DISPLAY_NAME,
             "upstream_model": LLM_MODEL,
             "vision_model": VISION_MODEL or "未启用",
-            "search": f"多源图库（Pexels/Unsplash/Pixabay），{'视觉精选' if VISION_ENABLED else '关键词排序'}，降级 Unsplash"}
+            "search": f"Pexels 图库，{'视觉精选' if VISION_ENABLED else '关键词排序'}，降级内置兜底图库"}
 
 if __name__ == "__main__":
-    mode = "MOCK" if IMAGE_MOCK else f"多源搜索{' + 视觉精选' if VISION_ENABLED else ''}"
+    mode = "MOCK" if IMAGE_MOCK else f"Pexels 搜索{' + 视觉精选' if VISION_ENABLED else ''}"
     print(f"🎨 配图AI服务 → http://127.0.0.1:{ILLUSTRATOR_PORT}  |  {mode}")
     uvicorn.run(app, host="0.0.0.0", port=ILLUSTRATOR_PORT, log_level="info")
