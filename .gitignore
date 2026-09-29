@@ -38,6 +38,15 @@ generated_images/
 .mypy_cache/
 .ruff_cache/
 
+# ── 打包产物（构建结果不入库，避免二进制膨胀与版本漂移）────
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.whl
+
 # ── IDE / 编辑器 ──────────────────────────────────────────
 .idea/
 .vscode/
