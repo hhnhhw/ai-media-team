@@ -522,7 +522,7 @@ if prompt := st.chat_input("输入你想写的主题，比如：帮我写一篇�
                     all_img_urls.append(m.group(1))
             # 4) 如果以上都没找到，提取所有 https:// 开头的URL中看起来像图片的
             if not all_img_urls:
-                _IMG_DOMAINS = ('pexels.com', 'unsplash.com', 'pixabay.com', 'image.baidu.com', 'baidu.com')
+                _IMG_DOMAINS = ('pexels.com', 'unsplash.com', 'pixabay.com')
                 all_img_urls += [u for u in re.findall(r'https?://[^\s\n"\)]+', raw)
                                 if any(u.lower().endswith(e) for e in ('.jpg','.jpeg','.png','.webp'))
                                 or any(d in u.lower() for d in _IMG_DOMAINS)]

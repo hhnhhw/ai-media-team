@@ -1,6 +1,6 @@
 """
 配图AI微服务 — Port 8002
-多源网络搜索（Pexels / Unsplash / Pixabay / 百度图片）→ 多模态视觉模型语义精选
+多源网络搜索（Pexels / Unsplash / Pixabay）→ 多模态视觉模型语义精选
 流程：
   1. 从文章实体列表提取关键词（已是实体列表则直接使用，否则交给 LLM 抽取）
   2. 每个关键词并发搜索多个图源，合并去重得到候选池
@@ -28,7 +28,7 @@ from config import (
     LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, IMAGE_MOCK, ILLUSTRATOR_PORT,
     LLM_TEMPERATURE, LLM_MAX_TOKENS_EXTRACT, LLM_DISPLAY_NAME,
     PEXELS_API_KEY, UNSPLASH_API_KEY, PIXABAY_API_KEY,
-    IMAGE_SOURCE_PEXELS, IMAGE_SOURCE_UNSPLASH, IMAGE_SOURCE_PIXABAY, IMAGE_SOURCE_BAIDU,
+    IMAGE_SOURCE_PEXELS, IMAGE_SOURCE_UNSPLASH, IMAGE_SOURCE_PIXABAY,
     VISION_MODEL, VISION_API_KEY, VISION_BASE_URL, VISION_ENABLED,
 )
 from llm_utils import chat_text
@@ -213,43 +213,6 @@ def _search_pixabay(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
         print(f"[配图AI] Pixabay 失败: {e}")
         return []
 
-def _search_baidu(query: str, count: int = PER_SOURCE_COUNT) -> list[dict]:
-    """百度图片搜索（免 key）。抓取 image.baidu.com 的 JSON 接口，返回百度 CDN 缩略图 URL。
-
-    说明：这是网页抓取，稳定性不如官方 API；失败会静默返回空列表，由其他图源兜底。
-    """
-    try:
-        params = {
-            "tn": "resultjson_com",
-            "ipn": "rj",
-            "word": query,
-            "pn": 0,
-            "rn": count,
-            "ie": "utf-8",
-        }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://image.baidu.com/",
-            "Accept": "application/json, text/plain, */*",
-        }
-        resp = requests.get("https://image.baidu.com/search/acjson", params=params, headers=headers, timeout=15)
-        resp.raise_for_status()
-        photos = []
-        for item in resp.json().get("data", []):
-            if not isinstance(item, dict):
-                continue
-            url = _normalize_url(item.get("middleURL") or item.get("thumbURL") or "")
-            if not url:
-                continue
-            alt = item.get("fromPageTitleEnc") or item.get("fromPageTitle") or ""
-            photos.append({"url": url, "alt": str(alt).strip(), "photographer": "", "id": str(item.get("id", ""))})
-        print(f"[配图AI] 百度图片 '{query[:30]}' → {len(photos)} 张")
-        return photos
-    except Exception as e:
-        print(f"[配图AI] 百度图片失败: {e}")
-        return []
-
 def _enabled_sources() -> list[tuple[str, Callable]]:
     """返回当前启用的图源列表 [(名称, 搜索函数)]，按优先级排序。"""
     sources = []
@@ -259,8 +222,6 @@ def _enabled_sources() -> list[tuple[str, Callable]]:
         sources.append(("Unsplash", _search_unsplash))
     if IMAGE_SOURCE_PIXABAY and PIXABAY_API_KEY:
         sources.append(("Pixabay", _search_pixabay))
-    if IMAGE_SOURCE_BAIDU:
-        sources.append(("百度", _search_baidu))
     return sources
 
 # ═══════════════════════════════════════════════════════════════
@@ -406,7 +367,7 @@ def health():
             "model": LLM_DISPLAY_NAME,
             "upstream_model": LLM_MODEL,
             "vision_model": VISION_MODEL or "未启用",
-            "search": f"多源图库 + 百度图片，{'视觉精选' if VISION_ENABLED else '关键词排序'}，降级 Unsplash"}
+            "search": f"多源图库（Pexels/Unsplash/Pixabay），{'视觉精选' if VISION_ENABLED else '关键词排序'}，降级 Unsplash"}
 
 if __name__ == "__main__":
     mode = "MOCK" if IMAGE_MOCK else f"多源搜索{' + 视觉精选' if VISION_ENABLED else ''}"

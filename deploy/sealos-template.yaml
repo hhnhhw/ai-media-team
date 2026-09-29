@@ -59,7 +59,7 @@ spec:
       default: '1024'
       required: false
     PEXELS_API_KEY:
-      description: 'Pexels 图库 API Key（免费申请 https://www.pexels.com/api/）。可选，多图源之一；留空则由百度图片等其他源兜底。'
+      description: 'Pexels 图库 API Key（免费申请 https://www.pexels.com/api/）。可选，多图源之一；建议至少配置一个图库 key。'
       type: string
       default: ''
       required: false

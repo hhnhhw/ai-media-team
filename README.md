@@ -10,7 +10,7 @@
 
 - 🧠 **主编智能体调度** — 基于 LangChain `create_agent`，自主分析需求、拆解任务、按序调用下属 Agent
 - ✍️ **多平台风格适配** — 公众号 / 小红书 / 抖音 / 微博，支持幽默、文艺、专业、种草等多种文风
-- 🎨 **多源网络搜索 + 视觉精选配图** — 从正文逐句扫描可拍摄实体名词，并发搜索 Pexels / Unsplash / Pixabay / 百度图片，再用视觉大模型按「与正文的匹配度」从候选图里挑出最贴题的那几张
+- 🎨 **多源网络搜索 + 视觉精选配图** — 从正文逐句扫描可拍摄实体名词，并发搜索 Pexels / Unsplash / Pixabay，再用视觉大模型按「与正文的匹配度」从候选图里挑出最贴题的那几张
 - 💬 **对话历史持久化** — SQLite 存储会话与消息，跨 Streamlit 会话保留上下文
 - 📡 **微服务架构** — 文案 / 配图各自独立 FastAPI 服务，可单独部署到云端
 - 🔌 **Mock 演示模式** — 未配置 API Key 时自动降级为内置示例数据，零成本跑通全流程
@@ -42,7 +42,7 @@
                        │                      │
                        ▼                      ▼
               ┌──────────────────┐  ┌──────────────────┐
-              │ OpenAI 兼容 LLM   │  │ 多源图库 + 百度  │
+              │ OpenAI 兼容 LLM   │  │ 多源图库          │
               │  兼容 LLM 接口    │  │  + 视觉模型精选  │
               └──────────────────┘  └──────────────────┘
                        │                      │
@@ -110,7 +110,7 @@ LLM_MODEL=your-model-name
 # LLM_MAX_TOKENS=4096
 # LLM_MAX_TOKENS_EXTRACT=1024
 
-# 多源图库（免费申请，填几个用几个；百度图片无需 key）
+# 多源图库（免费申请，填几个用几个；至少配一个）
 PEXELS_API_KEY=your-pexels-api-key-here
 UNSPLASH_API_KEY=
 PIXABAY_API_KEY=
@@ -239,7 +239,7 @@ curl -X POST http://127.0.0.1:8002/generate \
   "image_urls": ["https://...", "https://..."],
   "prompt_used": "成都火锅, 麻辣红油锅底, 涮毛肚黄喉",
   "search_query": "成都火锅",
-  "source": "Pexels+百度 · 视觉模型语义精选"
+  "source": "Pexels · 视觉模型语义精选"
 }
 ```
 
@@ -278,7 +278,7 @@ curl http://127.0.0.1:8002/health
 | Agent 编排 | LangChain (`create_agent`) |
 | 微服务 | FastAPI + Uvicorn |
 | 大模型 | 任意 OpenAI 兼容接口（`LLM_MODEL` / `LLM_BASE_URL` / `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_DISPLAY_NAME` 均可配置） |
-| 图片检索 | 多源网络搜索：Pexels / Unsplash / Pixabay / 百度图片（并发 + 自动降级） |
+| 图片检索 | 多源网络搜索：Pexels / Unsplash / Pixabay（并发 + 自动降级） |
 | 图片精选 | 多模态视觉模型（`VISION_MODEL`，可选，未配置时按关键词排序） |
 | 持久化 | SQLite (WAL) |
 
